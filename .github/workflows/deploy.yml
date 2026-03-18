@@ -20,12 +20,8 @@ jobs:
             git pull origin main
             cp -f index.html /var/www/toolmockup/index.html 2>/dev/null || true
             cp -f flow_server.py /root/flow_server.py
-            printf '[Unit]\nDescription=Google Flow Image Generator\nAfter=network.target\n\n[Service]\nType=simple\nEnvironment=DISPLAY=:99\nWorkingDirectory=/root\nExecStart=/root/flow_env/bin/python3 /root/flow_server.py\nRestart=on-failure\nRestartSec=5\nStandardOutput=append:/root/flow_server.log\nStandardError=append:/root/flow_server.log\n\n[Install]\nWantedBy=multi-user.target\n' > /etc/systemd/system/flow-server.service
-            pkill Xvfb || true
-            Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &
-            sleep 1
+            printf '[Unit]\nDescription=Google Flow Image Generator\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=/root\nExecStart=/usr/bin/xvfb-run -a /root/flow_env/bin/python3 /root/flow_server.py\nRestart=on-failure\nRestartSec=5\nStandardOutput=append:/root/flow_server.log\nStandardError=append:/root/flow_server.log\n\n[Install]\nWantedBy=multi-user.target\n' > /etc/systemd/system/flow-server.service
             systemctl daemon-reload
-            systemctl enable flow-server
             systemctl restart flow-server
-            systemctl restart nginx
-            echo "Deploy completed"
+            systemctl start nginx
+            echo "Done"
