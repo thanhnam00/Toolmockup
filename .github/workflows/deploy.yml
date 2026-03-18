@@ -20,7 +20,29 @@ jobs:
             git pull origin main
             cp -f index.html /var/www/toolmockup/index.html 2>/dev/null || true
             cp -f flow_server.py /root/flow_server.py
-            pkill -f flow_server.py || true
-            sleep 1
-            screen -dmS flow bash -c 'export DISPLAY=:99 && cd /root && /root/flow_env/bin/python3 /root/flow_server.py > /root/flow_server.log 2>&1'
+
+            # Create/update systemd service for flow_server
+            cat > /etc/systemd/system/flow-server.service << 'SVCEOF'
+            [Unit]
+            Description=Google Flow Image Generator
+            After=network.target
+
+            [Service]
+            Type=simple
+            Environment=DISPLAY=:99
+            WorkingDirectory=/root
+            ExecStart=/root/flow_env/bin/python3 /root/flow_server.py
+            Restart=on-failure
+            RestartSec=5
+            StandardOutput=append:/root/flow_server.log
+            StandardError=append:/root/flow_server.log
+
+            [Install]
+            WantedBy=multi-user.target
+            SVCEOF
+
+            systemctl daemon-reload
+            systemctl enable flow-server
+            systemctl restart flow-server
+            systemctl is-active flow-server
             echo "Deploy completed"
