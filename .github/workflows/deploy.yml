@@ -18,4 +18,16 @@ jobs:
           script: |
             cd /root/Toolmockup
             git pull origin main
+            # Copy frontend to web root
+            cp -f index.html /var/www/toolmockup/index.html 2>/dev/null || true
+            # Copy and restart flow_server
+            cp -f flow_server.py /root/flow_server.py
+            pkill -f flow_server.py || true
+            sleep 2
+            export DISPLAY=:99
+            cd /root
+            nohup /root/flow_env/bin/python3 /root/flow_server.py > /root/flow_server.log 2>&1 &
+            sleep 15
+            # Verify server started
+            curl -s http://127.0.0.1:5000/health || echo "WARNING: Server may not have started"
             echo "Deploy completed"
