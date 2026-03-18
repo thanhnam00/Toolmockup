@@ -9,20 +9,26 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to server
+      - name: Deploy files
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          command_timeout: 30s
           script: |
             cd /root/Toolmockup
             git pull origin main
             cp -f index.html /var/www/toolmockup/index.html 2>/dev/null || true
             cp -f flow_server.py /root/flow_server.py
-            # Kill old process and restart detached from SSH session
-            pkill -f flow_server.py || true
-            sleep 1
-            bash -c 'export DISPLAY=:99 && cd /root && setsid /root/flow_env/bin/python3 /root/flow_server.py > /root/flow_server.log 2>&1 < /dev/null &'
-            echo "Deploy completed"
+            cp -f restart_server.sh /root/restart_server.sh
+            chmod +x /root/restart_server.sh
+            echo "Files deployed"
+
+      - name: Restart server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            /root/restart_server.sh
