@@ -239,6 +239,20 @@ async def download_image(url: str) -> bytes:
         return resp.content
 
 
+def crop_image_square(img_data: bytes) -> bytes:
+    """Crop image to 1:1 ratio (center crop)."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(img_data))
+    w, h = img.size
+    size = min(w, h)
+    left = (w - size) // 2
+    top = (h - size) // 2
+    cropped = img.crop((left, top, left + size, top + size))
+    buf = io.BytesIO()
+    cropped.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # Command handlers
 # ---------------------------------------------------------------------------
@@ -296,15 +310,12 @@ async def send_image_with_save_button(
     # Create inline keyboard with Save button
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(
-                "💾 Luu ve Drive",
-                callback_data=f"save:{callback_id}"
-            ),
-            InlineKeyboardButton(
-                "📥 Tai ve",
-                callback_data=f"download:{callback_id}"
-            ),
-        ]
+            InlineKeyboardButton("💾 Luu ve Drive", callback_data=f"save:{callback_id}"),
+            InlineKeyboardButton("📥 Tai ve", callback_data=f"download:{callback_id}"),
+        ],
+        [
+            InlineKeyboardButton("✂️ Crop 1:1 & Luu Drive", callback_data=f"crop:{callback_id}"),
+        ],
     ])
 
     await update.message.reply_photo(
@@ -376,6 +387,48 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             filename=filename,
             caption=f"📥 {filename}",
         )
+
+    elif action == "crop":
+        # Crop 1:1 and save to Drive
+        await query.edit_message_caption(
+            caption=query.message.caption + "\n\n⏳ Dang crop 1:1 va luu Drive..."
+        )
+
+        try:
+            cropped_data = crop_image_square(img_data)
+            crop_filename = f"crop_{filename}"
+
+            # Save cropped to cache too
+            crop_cb_id = str(uuid.uuid4())[:8]
+            save_to_cache(crop_cb_id, cropped_data, prompt)
+
+            # Upload cropped to Drive
+            drive_url, drive_error = await upload_to_gdrive(cropped_data, crop_filename)
+
+            if drive_url:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📂 Mo trong Drive", url=drive_url)],
+                    [InlineKeyboardButton("📥 Tai ve crop", callback_data=f"download:{crop_cb_id}")],
+                ])
+                await query.edit_message_caption(
+                    caption=query.message.caption.split("\n\n⏳")[0] + f"\n\n✅ Da crop 1:1 & luu Drive!",
+                    reply_markup=keyboard,
+                )
+            else:
+                await query.edit_message_caption(
+                    caption=query.message.caption.split("\n\n⏳")[0] + f"\n\n❌ Crop OK nhung Drive loi: {drive_error}",
+                )
+
+            # Also send cropped image as photo
+            await query.message.reply_photo(
+                photo=cropped_data,
+                caption=f"✂️ Crop 1:1 - {prompt[:80]}",
+            )
+        except Exception as e:
+            log.error(f"Crop error: {e}")
+            await query.edit_message_caption(
+                caption=query.message.caption.split("\n\n⏳")[0] + f"\n\n❌ Crop loi: {e}",
+            )
 
 
 # ---------------------------------------------------------------------------
