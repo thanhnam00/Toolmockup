@@ -52,16 +52,45 @@ logging.basicConfig(
 log = logging.getLogger("telegram_bot")
 
 # ---------------------------------------------------------------------------
-# In-memory store for image data (keyed by callback ID)
+# Persistent image cache on disk (survives bot restarts)
 # ---------------------------------------------------------------------------
-image_cache = {}  # {callback_id: {"data": bytes, "prompt": str, "timestamp": float}}
+IMAGE_CACHE_DIR = "/root/image_cache"
+os.makedirs(IMAGE_CACHE_DIR, exist_ok=True)
+
+
+def save_to_cache(callback_id: str, img_data: bytes, prompt: str):
+    """Save image data and metadata to disk."""
+    img_path = os.path.join(IMAGE_CACHE_DIR, f"{callback_id}.png")
+    meta_path = os.path.join(IMAGE_CACHE_DIR, f"{callback_id}.json")
+    with open(img_path, "wb") as f:
+        f.write(img_data)
+    with open(meta_path, "w") as f:
+        json.dump({"prompt": prompt, "timestamp": time.time()}, f)
+
+
+def load_from_cache(callback_id: str) -> dict:
+    """Load image data and metadata from disk. Returns None if not found."""
+    img_path = os.path.join(IMAGE_CACHE_DIR, f"{callback_id}.png")
+    meta_path = os.path.join(IMAGE_CACHE_DIR, f"{callback_id}.json")
+    if not os.path.exists(img_path):
+        return None
+    with open(img_path, "rb") as f:
+        img_data = f.read()
+    prompt = ""
+    if os.path.exists(meta_path):
+        with open(meta_path, "r") as f:
+            meta = json.load(f)
+            prompt = meta.get("prompt", "")
+    return {"data": img_data, "prompt": prompt}
+
 
 def cleanup_cache():
-    """Remove cached images older than 30 minutes."""
+    """Remove cached images older than 7 days."""
     now = time.time()
-    expired = [k for k, v in image_cache.items() if now - v["timestamp"] > 7200]  # 2 hours
-    for k in expired:
-        del image_cache[k]
+    for fname in os.listdir(IMAGE_CACHE_DIR):
+        fpath = os.path.join(IMAGE_CACHE_DIR, fname)
+        if os.path.isfile(fpath) and (now - os.path.getmtime(fpath)) > 604800:  # 7 days
+            os.remove(fpath)
 
 
 # ---------------------------------------------------------------------------
@@ -237,15 +266,16 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status = "OK" if data.get("browser_ready") else "Chua san sang"
 
             # Check Google Drive
-            gdrive_status = "Chua cau hinh"
-            if os.path.exists(GDRIVE_CREDENTIALS_FILE) and GDRIVE_FOLDER_ID:
-                gdrive_status = "Da cau hinh"
+            gdrive_status = "OAuth2" if GDRIVE_REFRESH_TOKEN else "Chua cau hinh"
+
+            # Count cached images
+            cache_count = len([f for f in os.listdir(IMAGE_CACHE_DIR) if f.endswith(".png")]) if os.path.exists(IMAGE_CACHE_DIR) else 0
 
             await update.message.reply_text(
                 f"Flow Server: {status}\n"
                 f"Browser: {'Ready' if data.get('browser_ready') else 'Not ready'}\n"
                 f"Google Drive: {gdrive_status}\n"
-                f"Cached images: {len(image_cache)}"
+                f"Cached images: {cache_count}"
             )
     except Exception as e:
         await update.message.reply_text(f"Server khong phan hoi: {e}")
@@ -258,13 +288,9 @@ async def send_image_with_save_button(
     update: Update, img_data: bytes, index: int, total: int, prompt: str
 ):
     """Send a photo with an inline 'Save to Drive' button."""
-    # Generate unique callback ID and cache the image data
+    # Generate unique callback ID and save to disk cache
     callback_id = str(uuid.uuid4())[:8]
-    image_cache[callback_id] = {
-        "data": img_data,
-        "prompt": prompt,
-        "timestamp": time.time(),
-    }
+    save_to_cache(callback_id, img_data, prompt)
     cleanup_cache()
 
     # Create inline keyboard with Save button
@@ -301,7 +327,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     action, callback_id = data.split(":", 1)
-    cached = image_cache.get(callback_id)
+    cached = load_from_cache(callback_id)
 
     if not cached:
         await query.edit_message_caption(
