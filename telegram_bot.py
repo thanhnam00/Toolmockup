@@ -65,12 +65,15 @@ def cleanup_cache():
 # ---------------------------------------------------------------------------
 # Google Drive upload
 # ---------------------------------------------------------------------------
-async def upload_to_gdrive(image_data: bytes, filename: str) -> str:
-    """Upload image to Google Drive. Returns the file URL."""
+async def upload_to_gdrive(image_data: bytes, filename: str) -> tuple:
+    """Upload image to Google Drive. Returns (url, error_msg) tuple."""
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaInMemoryUpload
+
+        if not os.path.exists(GDRIVE_CREDENTIALS_FILE):
+            return None, f"Credentials file not found: {GDRIVE_CREDENTIALS_FILE}"
 
         creds = service_account.Credentials.from_service_account_file(
             GDRIVE_CREDENTIALS_FILE,
@@ -84,7 +87,6 @@ async def upload_to_gdrive(image_data: bytes, filename: str) -> str:
 
         media = MediaInMemoryUpload(image_data, mimetype="image/png")
 
-        # Run in executor since Google API client is sync
         loop = asyncio.get_event_loop()
         file = await loop.run_in_executor(
             None,
@@ -105,16 +107,16 @@ async def upload_to_gdrive(image_data: bytes, filename: str) -> str:
 
         web_link = file.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
         log.info(f"Uploaded to Google Drive: {web_link}")
-        return web_link
+        return web_link, None
 
-    except ImportError:
-        log.warning("Google Drive API not installed. Saving locally instead.")
-        return None
-    except FileNotFoundError:
-        log.warning(f"Google Drive credentials not found at {GDRIVE_CREDENTIALS_FILE}. Saving locally.")
-        return None
+    except ImportError as e:
+        msg = f"Google Drive packages not installed: {e}"
+        log.warning(msg)
+        return None, msg
     except Exception as e:
-        log.error(f"Google Drive upload failed: {e}")
+        msg = f"Drive upload error: {e}"
+        log.error(msg)
+        return None, msg
         return None
 
 
@@ -271,7 +273,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=query.message.caption + "\n\n⏳ Dang luu ve Drive..."
         )
 
-        drive_url = await upload_to_gdrive(img_data, filename)
+        drive_url, drive_error = await upload_to_gdrive(img_data, filename)
 
         if drive_url:
             # Update caption with Drive link
@@ -284,10 +286,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=keyboard,
             )
         else:
-            # Fallback: save locally and send as document
+            # Fallback: save locally and show error
             filepath = await save_image_local(img_data, filename)
+            error_msg = f"\n❌ Drive loi: {drive_error}" if drive_error else ""
             await query.edit_message_caption(
-                caption=query.message.caption.split("\n\n⏳")[0] + f"\n\n✅ Da luu: {filepath}",
+                caption=query.message.caption.split("\n\n⏳")[0] + f"\n\n⚠ Luu local: {filepath}{error_msg}",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("📥 Tai ve", callback_data=f"download:{callback_id}")],
                 ]),
