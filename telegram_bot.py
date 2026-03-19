@@ -32,7 +32,7 @@ FLOW_SERVER_URL = os.environ.get("FLOW_SERVER_URL", "http://127.0.0.1:5000")
 ALLOWED_USERS = os.environ.get("ALLOWED_USERS", "")  # comma-separated user IDs, empty = allow all
 
 # Google Drive config
-GDRIVE_FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "")  # Google Drive folder ID to save images
+GDRIVE_FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "1OKwP3YnpdOIRxKoPMfs0yAwmVaQ6Ayx4")  # Google Drive folder ID to save images
 GDRIVE_CREDENTIALS_FILE = os.environ.get("GDRIVE_CREDENTIALS_FILE", "/root/gdrive_credentials.json")
 
 # Local save directory (fallback if Google Drive not configured)
