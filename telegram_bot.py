@@ -31,9 +31,11 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8799245561:AAHFVQeUXA
 FLOW_SERVER_URL = os.environ.get("FLOW_SERVER_URL", "http://127.0.0.1:5000")
 ALLOWED_USERS = os.environ.get("ALLOWED_USERS", "")  # comma-separated user IDs, empty = allow all
 
-# Google Drive config
-GDRIVE_FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "1OKwP3YnpdOIRxKoPMfs0yAwmVaQ6Ayx4")  # Google Drive folder ID to save images
-GDRIVE_CREDENTIALS_FILE = os.environ.get("GDRIVE_CREDENTIALS_FILE", "/root/gdrive_credentials.json")
+# Google Drive config (OAuth2)
+GDRIVE_FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "1OKwP3YnpdOIRxKoPMfs0yAwmVaQ6Ayx4")
+GDRIVE_CLIENT_ID = os.environ.get("GDRIVE_CLIENT_ID", "702254157413-3ddqa8dotcc34saiacckij2b6fgoa1gl.apps.googleusercontent.com")
+GDRIVE_CLIENT_SECRET = os.environ.get("GDRIVE_CLIENT_SECRET", "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")
+GDRIVE_REFRESH_TOKEN = os.environ.get("GDRIVE_REFRESH_TOKEN", "1//0ePu2c3x37ZOyCgYIARAAGA4SNwF-L9Ir2E_oIw6zBzvu6NJbSL-FU1yxrDqkvOEZ16Pchl-p-nu9uyicolepsbkJ2ccVgjAIvmw")
 
 # Local save directory (fallback if Google Drive not configured)
 SAVE_DIR = "/root/saved_images"
@@ -66,19 +68,21 @@ def cleanup_cache():
 # Google Drive upload
 # ---------------------------------------------------------------------------
 async def upload_to_gdrive(image_data: bytes, filename: str) -> tuple:
-    """Upload image to Google Drive. Returns (url, error_msg) tuple."""
+    """Upload image to Google Drive using OAuth2. Returns (url, error_msg) tuple."""
     try:
-        from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaInMemoryUpload
 
-        if not os.path.exists(GDRIVE_CREDENTIALS_FILE):
-            return None, f"Credentials file not found: {GDRIVE_CREDENTIALS_FILE}"
-
-        creds = service_account.Credentials.from_service_account_file(
-            GDRIVE_CREDENTIALS_FILE,
-            scopes=["https://www.googleapis.com/auth/drive.file"]
+        creds = Credentials(
+            token=None,
+            refresh_token=GDRIVE_REFRESH_TOKEN,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=GDRIVE_CLIENT_ID,
+            client_secret=GDRIVE_CLIENT_SECRET,
+            scopes=["https://www.googleapis.com/auth/drive.file"],
         )
+
         service = build("drive", "v3", credentials=creds)
 
         file_metadata = {"name": filename}
@@ -96,15 +100,6 @@ async def upload_to_gdrive(image_data: bytes, filename: str) -> tuple:
         )
 
         file_id = file.get("id")
-        # Make file viewable by anyone with the link
-        await loop.run_in_executor(
-            None,
-            lambda: service.permissions().create(
-                fileId=file_id,
-                body={"type": "anyone", "role": "reader"}
-            ).execute()
-        )
-
         web_link = file.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
         log.info(f"Uploaded to Google Drive: {web_link}")
         return web_link, None
@@ -117,7 +112,6 @@ async def upload_to_gdrive(image_data: bytes, filename: str) -> tuple:
         msg = f"Drive upload error: {e}"
         log.error(msg)
         return None, msg
-        return None
 
 
 async def save_image_local(image_data: bytes, filename: str) -> str:
