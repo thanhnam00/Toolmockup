@@ -857,6 +857,24 @@ async def debug_env():
 
     checks["saved_images_dir"] = os.path.exists("/root/saved_images")
 
+    try:
+        from PIL import Image
+        checks["pillow"] = True
+    except ImportError:
+        checks["pillow"] = False
+
+    # Check telegram bot process
+    import subprocess
+    result = subprocess.run(["systemctl", "is-active", "telegram-bot"], capture_output=True, text=True)
+    checks["telegram_bot_service"] = result.stdout.strip()
+
+    # Check image cache dir
+    cache_dir = "/root/image_cache"
+    if os.path.exists(cache_dir):
+        checks["image_cache_count"] = len([f for f in os.listdir(cache_dir) if f.endswith(".png")])
+    else:
+        checks["image_cache_count"] = 0
+
     return checks
 
 
