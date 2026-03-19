@@ -54,6 +54,110 @@ page: Page = None
 generation_lock = asyncio.Lock()
 
 
+async def navigate_to_project():
+    """Navigate to Flow main page, click Flow button, then click into project."""
+    log.info(f"Navigating to: {PROJECT_URL}")
+    await page.goto(PROJECT_URL, wait_until="networkidle", timeout=60000)
+    log.info("Page loaded. Waiting for UI to settle...")
+    await page.wait_for_timeout(5000)
+
+    current_url = page.url
+    log.info(f"Current URL: {current_url}")
+
+    # Click Flow button using JavaScript to handle unicode/special chars
+    try:
+        clicked = await page.evaluate("""
+            () => {
+                const els = [...document.querySelectorAll('a, button')];
+                for (const el of els) {
+                    const text = el.textContent || '';
+                    if (text.toUpperCase().includes('FLOW') && !text.toUpperCase().includes('MUSIC')) {
+                        el.click();
+                        return el.textContent.trim();
+                    }
+                }
+                return null;
+            }
+        """)
+        if clicked:
+            log.info(f"Clicked Flow button: '{clicked}'")
+            await page.wait_for_timeout(8000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=30000)
+            except Exception:
+                pass
+            current_url = page.url
+            log.info(f"After clicking Flow, URL: {current_url}")
+        else:
+            log.warning("No Flow button found via JS")
+    except Exception as e:
+        log.warning(f"Error clicking Flow: {e}")
+
+    await page.screenshot(path="/root/flow_init.png")
+    log.info(f"Screenshot saved. Current URL: {page.url}")
+
+    # On Flow main page, click on the most recent project
+    await page.wait_for_timeout(3000)
+
+    try:
+        project_clicked = await page.evaluate("""
+            () => {
+                const cards = document.querySelectorAll('[role="listitem"], [role="button"], a[href*="project"]');
+                if (cards.length > 0) {
+                    cards[0].click();
+                    return 'Clicked first project card';
+                }
+                const imgs = document.querySelectorAll('img');
+                for (const img of imgs) {
+                    const rect = img.getBoundingClientRect();
+                    if (rect.width > 100 && rect.height > 100 && rect.top > 100) {
+                        img.click();
+                        return 'Clicked thumbnail: ' + img.alt;
+                    }
+                }
+                return null;
+            }
+        """)
+        if project_clicked:
+            log.info(f"Project: {project_clicked}")
+            await page.wait_for_timeout(5000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                pass
+            log.info(f"After project click, URL: {page.url}")
+            await page.screenshot(path="/root/flow_project.png")
+    except Exception as e:
+        log.warning(f"Error clicking project: {e}")
+
+    # Now look for the input field
+    try:
+        await page.wait_for_selector(
+            'textarea, [contenteditable="true"], input[type="text"], [placeholder]',
+            timeout=15000,
+        )
+        log.info("Input field found - UI ready.")
+    except Exception:
+        log.warning("Could not find input field.")
+        await page.screenshot(path="/root/flow_init2.png")
+        elements = await page.evaluate("""
+            () => {
+                const els = document.querySelectorAll('input, textarea, [contenteditable], [role="textbox"]');
+                return Array.from(els).map(e => ({
+                    tag: e.tagName,
+                    type: e.type,
+                    placeholder: e.placeholder,
+                    role: e.getAttribute('role'),
+                    visible: e.offsetParent !== null,
+                    rect: e.getBoundingClientRect()
+                }));
+            }
+        """)
+        log.info(f"Found elements: {elements}")
+
+    log.info("Navigate to project complete.")
+
+
 async def init_browser():
     """Launch browser, set cookie, navigate to project."""
     global pw_instance, browser, context, page
@@ -95,110 +199,7 @@ async def init_browser():
 
     page = await context.new_page()
 
-    log.info(f"Navigating to: {PROJECT_URL}")
-    await page.goto(PROJECT_URL, wait_until="networkidle", timeout=60000)
-    log.info("Page loaded. Waiting for UI to settle...")
-    await page.wait_for_timeout(5000)
-
-    current_url = page.url
-    log.info(f"Current URL: {current_url}")
-
-    # Click Flow button using JavaScript to handle unicode/special chars
-    try:
-        clicked = await page.evaluate("""
-            () => {
-                // Find all links and buttons containing "FLOW" or "Flow"
-                const els = [...document.querySelectorAll('a, button')];
-                for (const el of els) {
-                    const text = el.textContent || '';
-                    if (text.toUpperCase().includes('FLOW') && !text.toUpperCase().includes('MUSIC')) {
-                        el.click();
-                        return el.textContent.trim();
-                    }
-                }
-                return null;
-            }
-        """)
-        if clicked:
-            log.info(f"Clicked Flow button: '{clicked}'")
-            await page.wait_for_timeout(8000)
-            try:
-                await page.wait_for_load_state("networkidle", timeout=30000)
-            except Exception:
-                pass
-            current_url = page.url
-            log.info(f"After clicking Flow, URL: {current_url}")
-        else:
-            log.warning("No Flow button found via JS")
-    except Exception as e:
-        log.warning(f"Error clicking Flow: {e}")
-
-    await page.screenshot(path="/root/flow_init.png")
-    log.info(f"Screenshot saved. Current URL: {page.url}")
-
-    # On Flow main page, we need to click on a project to open it
-    # Look for the project card or "Bạn muốn tạo gì?" input
-    await page.wait_for_timeout(3000)
-
-    # Try to find and click on the most recent project (first one)
-    try:
-        project_clicked = await page.evaluate("""
-            () => {
-                // Look for project cards/thumbnails
-                const cards = document.querySelectorAll('[role="listitem"], [role="button"], a[href*="project"]');
-                if (cards.length > 0) {
-                    cards[0].click();
-                    return 'Clicked first project card';
-                }
-                // Try clicking any thumbnail image in the grid
-                const imgs = document.querySelectorAll('img');
-                for (const img of imgs) {
-                    const rect = img.getBoundingClientRect();
-                    if (rect.width > 100 && rect.height > 100 && rect.top > 100) {
-                        img.click();
-                        return 'Clicked thumbnail: ' + img.alt;
-                    }
-                }
-                return null;
-            }
-        """)
-        if project_clicked:
-            log.info(f"Project: {project_clicked}")
-            await page.wait_for_timeout(5000)
-            try:
-                await page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
-            log.info(f"After project click, URL: {page.url}")
-            await page.screenshot(path="/root/flow_project.png")
-    except Exception as e:
-        log.warning(f"Error clicking project: {e}")
-
-    # Now look for the input field
-    try:
-        await page.wait_for_selector(
-            'textarea, [contenteditable="true"], input[type="text"], [placeholder]',
-            timeout=15000,
-        )
-        log.info("Input field found - UI ready.")
-    except Exception:
-        log.warning("Could not find input field.")
-        await page.screenshot(path="/root/flow_init2.png")
-        # Log all interactive elements for debugging
-        elements = await page.evaluate("""
-            () => {
-                const els = document.querySelectorAll('input, textarea, [contenteditable], [role="textbox"]');
-                return Array.from(els).map(e => ({
-                    tag: e.tagName,
-                    type: e.type,
-                    placeholder: e.placeholder,
-                    role: e.getAttribute('role'),
-                    visible: e.offsetParent !== null,
-                    rect: e.getBoundingClientRect()
-                }));
-            }
-        """)
-        log.info(f"Found elements: {elements}")
+    await navigate_to_project()
 
     log.info("Browser initialization complete.")
 
@@ -836,10 +837,9 @@ async def debug_html():
 async def reload_page():
     if not page:
         raise HTTPException(status_code=503, detail="Browser not initialized.")
-    log.info("Reloading Flow page...")
-    await page.goto(PROJECT_URL, wait_until="networkidle", timeout=60000)
-    await page.wait_for_timeout(3000)
-    log.info("Page reloaded.")
+    log.info("Reloading Flow page and navigating to project...")
+    await navigate_to_project()
+    log.info("Page reloaded and project opened.")
     return {"status": "reloaded"}
 
 
