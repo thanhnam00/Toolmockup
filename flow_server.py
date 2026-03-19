@@ -874,6 +874,52 @@ async def update_token(req: UpdateTokenRequest):
 
 
 # ---------------------------------------------------------------------------
+# Debug: check server environment
+# ---------------------------------------------------------------------------
+@app.get("/debug-env")
+async def debug_env():
+    """Check if Google Drive credentials and packages are available."""
+    import shutil
+    checks = {}
+
+    # Check credentials file
+    cred_path = "/root/gdrive_credentials.json"
+    checks["credentials_file_exists"] = os.path.exists(cred_path)
+    if os.path.exists(cred_path):
+        checks["credentials_file_size"] = os.path.getsize(cred_path)
+
+    # Check packages
+    try:
+        import google.auth
+        checks["google_auth"] = True
+    except ImportError:
+        checks["google_auth"] = False
+
+    try:
+        from googleapiclient.discovery import build
+        checks["google_api_client"] = True
+    except ImportError:
+        checks["google_api_client"] = False
+
+    try:
+        import httpx
+        checks["httpx"] = True
+    except ImportError:
+        checks["httpx"] = False
+
+    # Check telegram bot
+    try:
+        import telegram
+        checks["telegram_bot"] = True
+    except ImportError:
+        checks["telegram_bot"] = False
+
+    checks["saved_images_dir"] = os.path.exists("/root/saved_images")
+
+    return checks
+
+
+# ---------------------------------------------------------------------------
 # Run with uvicorn
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
