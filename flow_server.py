@@ -861,6 +861,25 @@ async def debug_env():
 
 
 # ---------------------------------------------------------------------------
+# Upload Google Drive credentials
+# ---------------------------------------------------------------------------
+@app.post("/upload-credentials")
+async def upload_credentials(request: Request):
+    """Write Google Drive credentials JSON to server."""
+    try:
+        body = await request.json()
+        cred_path = "/root/gdrive_credentials.json"
+        import json as _json
+        with open(cred_path, "w") as f:
+            _json.dump(body, f, indent=2)
+        log.info(f"Credentials written to {cred_path} ({os.path.getsize(cred_path)} bytes)")
+        return {"status": "ok", "path": cred_path, "size": os.path.getsize(cred_path)}
+    except Exception as e:
+        log.error(f"Failed to write credentials: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
 # Run with uvicorn
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":

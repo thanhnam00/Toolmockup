@@ -57,7 +57,7 @@ image_cache = {}  # {callback_id: {"data": bytes, "prompt": str, "timestamp": fl
 def cleanup_cache():
     """Remove cached images older than 30 minutes."""
     now = time.time()
-    expired = [k for k, v in image_cache.items() if now - v["timestamp"] > 1800]
+    expired = [k for k, v in image_cache.items() if now - v["timestamp"] > 7200]  # 2 hours
     for k in expired:
         del image_cache[k]
 

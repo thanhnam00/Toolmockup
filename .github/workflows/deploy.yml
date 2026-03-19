@@ -21,21 +21,6 @@ jobs:
             cp -f index.html /var/www/toolmockup/index.html 2>/dev/null || true
             cp -f flow_server.py /root/flow_server.py
             cp -f telegram_bot.py /root/telegram_bot.py
-            cat << 'CREDEOF' > /root/gdrive_credentials.json
-            {
-              "type": "service_account",
-              "project_id": "mockuptool-490702",
-              "private_key_id": "7b93d020854517cfb67c6dd18429c8c1f62a9e20",
-              "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7brRPHiUheUJk\nwQNv1bqUeSqCpRc2XDXWsjpWLHU/GGmERD7loPrGpSINtyR4wHNlOsC+7vktAJ84\n4LlVqvWSSo1wEihb/kdLkIubmfpIhhuySG0XmbG0+zarDAVUiCFMfgo2+vEDupA+\n/XrsfgzHsYFmqGIcLKTGUjBeqyOMTMMf0tVrauyIVg2uD1JPVnAQ6x8oUSRbSBXN\nqXZhRWTep2gMZ4TBazfLZC8zXIir7MIrCt+egRMelIGzwjEAoyv5mm1+hbZAl/CN\nKLmm3Lo8FCFp4swMXnm30fH3q8Y5o0OIiW+JjKKTWGBB0ttajH5R5a/s9ik4TOWd\nXJGv1w85AgMBAAECggEACLfzEjUURBTYZkhmKQcXmT1zoUUdqc0rQfPja8vAnnE7\nw0fLZzIQSDo5NcsdmrJVC9HqUldaZuH/Bg3KATalGqt2Hc7yaqkO1vB/1fqZHlOC\nqU3eKTlgf0sqNVWnT9HPPrgkMH+Gw4YjnJJ869BHNujGXKibe7UF6yW6k0TBsA5z\nl6kKjZL8GsvanVk4QQcfHNHQvbWgCncWPwNJqYkfJYAazfcd6frYkMI9pxPKpBlF\nqj/Y80NgEOwuldyERZ0xM82VZv+yMt9Wf8VvDhX4+XHHzkleJ2EFOb8Hx/NIhXEl\nDpXfArwwpIc0cUaFmF7pXCZ5vk5sWINVpknD0tKPyQKBgQDuSY8xcPS2LILAI023\nzaDdykImNexyWrFD5CZeWo9YpzyeQXs72RsCPHBUw8UitneHeYEdT1TBrO7n8Lxc\neav8Sq82o8B11N3h8xOgSq50lDwD3UaERDVGKXE0kpqDfgxTuP1EXNp/FMJAsPFe\nxqhKOX+qLmXKIKJyfnOkAJZk5QKBgQDJXWl0JP4HLsahSnHcJ6ffHmZVJm1zI43m\nmpJyW2B2DsB1uiJq01bsaCFKpIrzl9UQvu5jHQ3kKp/jvaPG/wMK0X4nkGbYqb1i\nhsYM7hYU/6lR5wmp7cR2tt/rNIYoQvHMcAf7l+p/IrrSutRltA21ymYdhyBAR1lQ\nw61sGkoPxQKBgEj67ohN+CTzbPg718m7iNFk6O2bBlffvvr0HWw4gD6+uaoelAe4\nbrU4nY7YhsAi8mjjpc+8RFEtDd6rtIT+HtaeaRtq+78a+voA4LnvJY8+90KXusk3\nurlKaAmZ/QjYyh26Qpd1eNYDHZuClepZHaHeCmOs4jAN3rMCV5ibNXShAoGAS3I3\nb6/oifJps8b70Dv/duah+udx/MDmiu+BTV2VT8aJL9L00Ees+titGJV8Bnbt+t8+\n3F3ndYTO8Xp9YbLsheImPVaqYiV+8uqCTBfsqCN+YlSJV2ThxoUQcsT0OyOSC0Iy\ni37I+qedjhU4PX7v4BwclJWrbMoO2ebnFGjpNO0CgYEA2TufbPlyLsyyFwHy/Zt9\nmkrQNOhXvWpOTsQs+UgBvhNzgXatxZzvBlB9hkRWdMjSzeqDkAMLkNm/GmpVzQvt\nNzZWkxmrDf77di7WZO0mQSYgq2Cnbbe7c9mqMBnd1jUcUhjw9Tv/U/zF9DUWuVnF\nyLn8K6ug7iO0hBjbhopQRp8=\n-----END PRIVATE KEY-----\n",
-              "client_email": "toolmockup@mockuptool-490702.iam.gserviceaccount.com",
-              "client_id": "117881445458311264724",
-              "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-              "token_uri": "https://oauth2.googleapis.com/token",
-              "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-              "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/toolmockup%40mockuptool-490702.iam.gserviceaccount.com",
-              "universe_domain": "googleapis.com"
-            }
-            CREDEOF
             /root/flow_env/bin/pip install python-telegram-bot httpx google-api-python-client google-auth 2>/dev/null || true
             printf '[Unit]\nDescription=Google Flow Image Generator\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=/root\nExecStart=/usr/bin/xvfb-run -a /root/flow_env/bin/python3 /root/flow_server.py\nRestart=on-failure\nRestartSec=5\nStandardOutput=append:/root/flow_server.log\nStandardError=append:/root/flow_server.log\n\n[Install]\nWantedBy=multi-user.target\n' > /etc/systemd/system/flow-server.service
             printf '[Unit]\nDescription=Telegram Bot for Flow\nAfter=flow-server.service\n\n[Service]\nType=simple\nWorkingDirectory=/root\nExecStart=/root/flow_env/bin/python3 /root/telegram_bot.py\nRestart=on-failure\nRestartSec=5\nStandardOutput=append:/root/telegram_bot.log\nStandardError=append:/root/telegram_bot.log\n\n[Install]\nWantedBy=multi-user.target\n' > /etc/systemd/system/telegram-bot.service
