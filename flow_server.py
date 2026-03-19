@@ -647,16 +647,20 @@ async def generate(req: GenerateRequest):
                 # Step 5: Wait for new image URLs from network
                 deadline = time.time() + GENERATION_TIMEOUT - 8
 
+                first_image_time = None
                 while time.time() < deadline:
-                    if new_image_urls:
-                        # Wait a bit more for additional images
-                        await page.wait_for_timeout(5000)
-                        log.info(f"Found {len(new_image_urls)} image URL(s) from network!")
+                    if new_image_urls and not first_image_time:
+                        first_image_time = time.time()
+                        log.info(f"First image captured! Waiting for more...")
+
+                    # After first image, wait up to 15s for additional images
+                    if first_image_time and (time.time() - first_image_time) > 15:
+                        log.info(f"Done waiting. Got {len(new_image_urls)} image(s).")
                         break
 
-                    await page.wait_for_timeout(3000)
+                    await page.wait_for_timeout(2000)
                     elapsed = time.time() - start_time
-                    log.info(f"Still waiting... ({elapsed:.0f}s elapsed, {len(new_image_urls)} captured)")
+                    log.info(f"Waiting... ({elapsed:.0f}s elapsed, {len(new_image_urls)} captured)")
 
                 elapsed = time.time() - start_time
 
