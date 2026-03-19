@@ -496,58 +496,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle text-only messages (generate without reference image)."""
-    user = update.effective_user
-    if not is_allowed(user.id):
-        await update.message.reply_text("Ban khong co quyen su dung bot nay.")
+    """Handle text-only messages - warn user to send image + prompt."""
+    if update.message.text.startswith("/"):
         return
 
-    prompt = update.message.text.strip()
-    if not prompt:
-        return
-
-    if prompt.startswith("/"):
-        return
-
-    status_msg = await update.message.reply_text(
-        f"⏳ Dang tao anh voi Google Flow...\n📝 Prompt: {prompt}\n⏱ Vui long doi 30-90 giay..."
+    await update.message.reply_text(
+        "⚠️ Ban can gui anh mau kem mo ta (caption) de tao anh moi.\n\n"
+        "Cach dung:\n"
+        "1. Gui 1 anh mau\n"
+        "2. Them caption mo ta (vd: 'doi mau sang do')\n"
+        "3. Doi ket qua 30-90 giay\n\n"
+        "💡 Khong ho tro tao anh chi bang text."
     )
-
-    try:
-        log.info(f"User {user.id} ({user.username}): text prompt='{prompt[:50]}...'")
-
-        start_time = time.time()
-        result = await call_flow_server(prompt)
-        elapsed = time.time() - start_time
-
-        images = result.get("images", [])
-        if not images:
-            await status_msg.edit_text("❌ Khong nhan duoc anh tu Google Flow. Thu lai sau.")
-            return
-
-        await status_msg.edit_text(
-            f"✅ Da tao {len(images)} anh trong {result.get('elapsed_seconds', elapsed):.0f}s. Dang gui..."
-        )
-
-        for i, img_url in enumerate(images):
-            try:
-                img_data = await download_image(img_url)
-                await send_image_with_save_button(
-                    update, img_data, i + 1, len(images), prompt
-                )
-            except Exception as e:
-                log.error(f"Failed to send image {i+1}: {e}")
-                await update.message.reply_text(f"Loi gui anh {i+1}: {e}")
-
-        await status_msg.delete()
-
-    except httpx.HTTPStatusError as e:
-        error_detail = e.response.text[:200] if e.response else str(e)
-        log.error(f"Flow server error: {error_detail}")
-        await status_msg.edit_text(f"❌ Loi server: {error_detail}")
-    except Exception as e:
-        log.error(f"Generation error: {e}")
-        await status_msg.edit_text(f"❌ Loi: {str(e)[:200]}")
 
 
 # ---------------------------------------------------------------------------
