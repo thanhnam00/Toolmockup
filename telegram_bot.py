@@ -67,6 +67,52 @@ def cleanup_cache():
 # ---------------------------------------------------------------------------
 # Google Drive upload
 # ---------------------------------------------------------------------------
+def _get_vn_now():
+    """Get current datetime in UTC+7 (Vietnam timezone)."""
+    from datetime import datetime, timezone, timedelta
+    return datetime.now(timezone(timedelta(hours=7)))
+
+
+def _find_or_create_folder(service, name: str, parent_id: str) -> str:
+    """Find existing folder by name in parent, or create it. Returns folder ID."""
+    # Search for existing folder
+    query = (
+        f"name='{name}' and mimeType='application/vnd.google-apps.folder' "
+        f"and '{parent_id}' in parents and trashed=false"
+    )
+    results = service.files().list(q=query, fields="files(id)").execute()
+    files = results.get("files", [])
+    if files:
+        return files[0]["id"]
+
+    # Create new folder
+    metadata = {
+        "name": name,
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [parent_id],
+    }
+    folder = service.files().create(body=metadata, fields="id").execute()
+    log.info(f"Created Drive folder: {name} (id={folder['id']})")
+    return folder["id"]
+
+
+def _get_date_folder_id(service) -> str:
+    """Get or create folder structure: Root > Năm YYYY > Tháng M > Ngày D."""
+    now = _get_vn_now()
+    root_id = GDRIVE_FOLDER_ID
+
+    # Year folder: "Năm 2026"
+    year_folder_id = _find_or_create_folder(service, f"Năm {now.year}", root_id)
+
+    # Month folder: "Tháng 3"
+    month_folder_id = _find_or_create_folder(service, f"Tháng {now.month}", year_folder_id)
+
+    # Day folder: "Ngày 19"
+    day_folder_id = _find_or_create_folder(service, f"Ngày {now.day}", month_folder_id)
+
+    return day_folder_id
+
+
 async def upload_to_gdrive(image_data: bytes, filename: str) -> tuple:
     """Upload image to Google Drive using OAuth2. Returns (url, error_msg) tuple."""
     try:
@@ -85,13 +131,19 @@ async def upload_to_gdrive(image_data: bytes, filename: str) -> tuple:
 
         service = build("drive", "v3", credentials=creds)
 
-        file_metadata = {"name": filename}
-        if GDRIVE_FOLDER_ID:
-            file_metadata["parents"] = [GDRIVE_FOLDER_ID]
+        # Get date-based folder (Root > Năm > Tháng > Ngày)
+        loop = asyncio.get_event_loop()
+        target_folder_id = await loop.run_in_executor(
+            None, lambda: _get_date_folder_id(service)
+        )
+
+        file_metadata = {
+            "name": filename,
+            "parents": [target_folder_id],
+        }
 
         media = MediaInMemoryUpload(image_data, mimetype="image/png")
 
-        loop = asyncio.get_event_loop()
         file = await loop.run_in_executor(
             None,
             lambda: service.files().create(
@@ -101,7 +153,8 @@ async def upload_to_gdrive(image_data: bytes, filename: str) -> tuple:
 
         file_id = file.get("id")
         web_link = file.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
-        log.info(f"Uploaded to Google Drive: {web_link}")
+        now = _get_vn_now()
+        log.info(f"Uploaded to Drive: Năm {now.year}/Tháng {now.month}/Ngày {now.day}/{filename}")
         return web_link, None
 
     except ImportError as e:
